@@ -8,7 +8,7 @@ output:
 ---
 
 ##Objective
-I didn't think I was going to be able to do any work on quantifying lobbying data; however I was pleasantly surprised when I found out that lobbying entities had to disclose their activities to the public (here's the [link to the data](http://www.senate.gov/legislative/Public_Disclosure/database_download.htm).  I want to answer a couple of questions with this data:
+I didn't think I was going to be able to do any work on quantifying lobbying data; however I was pleasantly surprised when I found out that lobbying entities had to disclose their activities to the public (here's the [link to the data](http://www.senate.gov/legislative/Public_Disclosure/database_download.htm)).  I want to answer a couple of questions with this data:
 
 * What entities lobby the hardest?
 * What issues are lobbied the hardest
@@ -16,7 +16,7 @@ I didn't think I was going to be able to do any work on quantifying lobbying dat
 ##The Data
 My initial discovery of the data was tempered when I viewed how it was stored: XML.  Not only is the data in XML, but most of the data is stored in XML attributes.  Rather than turn back, I decided to push forward with the hope that I'd be able to learn the XPath querying language to adequately parse the data in to a more manageable format.  I've linked [one particular website](http://gastonsanchez.com/work/webdata/getting_web_data_r4_parsing_xml_html.pdf) that helped me learn XML in R.  
 
-I've decided to take a relational database approach with the XML schema.  Below, I've included the Entity Relationship Diagram (ERD) of what the database schema would look like for the XML files.  In this analysis, we will not be including the Lobbying or Gov't Entity entities.
+I've decided to take a relational database approach with the XML schema.  Below, I've included the Entity Relationship Diagram (ERD) of what the database schema would look like for the XML files.  In this analysis, we will not be including the Lobbyist or Gov't Entity entities.
 
 ![Lobbying Entity Relationship Diagram](Lobbying_ERD.png)
 
