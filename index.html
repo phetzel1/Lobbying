@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Lobbying by phetzel1</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Lobbying</h1>
+      <h2 class="project-tagline">Analysis with the Lobbying Disclosure Database</h2>
+      <a href="https://github.com/phetzel1/Lobbying" class="btn">View on GitHub</a>
+      <a href="https://github.com/phetzel1/Lobbying/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/phetzel1/Lobbying/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h1>
+<a id="lobbying-disclosures" class="anchor" href="#lobbying-disclosures" aria-hidden="true"><span class="octicon octicon-link"></span></a>Lobbying Disclosures</h1>
+
+<p>Phillip Hetzel<br>
+April 24, 2015  </p>
+
+<h2>
+<a id="objective" class="anchor" href="#objective" aria-hidden="true"><span class="octicon octicon-link"></span></a>Objective</h2>
+
+<p>I didn't think I was going to be able to do any work on quantifying lobbying data; however I was pleasantly surprised when I found out that lobbying entities had to disclose their activities to the public (here's the <a href="http://www.senate.gov/legislative/Public_Disclosure/database_download.htm">link to the data</a>.  I want to answer a couple of questions with this data:</p>
+
+<ul>
+<li>What entities lobby the hardest?</li>
+<li>What issues are lobbied the hardest</li>
+</ul>
+
+<h2>
+<a id="the-data" class="anchor" href="#the-data" aria-hidden="true"><span class="octicon octicon-link"></span></a>The Data</h2>
+
+<p>My initial discovery of the data was tempered when I viewed how it was stored: XML.  Not only is the data in XML, but most of the data is stored in XML attributes.  Rather than turn back, I decided to push forward with the hope that I'd be able to learn the XPath querying language to adequately parse the data in to a more manageable format.  I've linked <a href="http://gastonsanchez.com/work/webdata/getting_web_data_r4_parsing_xml_html.pdf">one particular website</a> that helped me learn XML in R.  </p>
+
+<p>I've decided to take a relational database approach with the XML schema.  Below, I've included the Entity Relationship Diagram (ERD) of what the database schema would look like for the XML files.  In this analysis, we will not be including the Lobbying or Gov't Entity entities.</p>
+
+<p><img src="Lobbying_ERD.png" alt="Lobbying Entity Relationship Diagram"></p>
+
+<h2>
+<a id="set-up" class="anchor" href="#set-up" aria-hidden="true"><span class="octicon octicon-link"></span></a>Set Up</h2>
+
+<p>I know I'm going to have to deal with an XML file, so I load the XML package in R.  I also set my working directory and clear my memory.</p>
+
+<div class="highlight highlight-r"><pre>require(<span class="pl-smi">XML</span>)
+require(<span class="pl-smi">dplyr</span>)
+require(<span class="pl-smi">ggplot2</span>)
+setwd(<span class="pl-s"><span class="pl-pds">"</span>~/R Working Directory/Lobbying_Data/<span class="pl-pds">"</span></span>)
+rm(<span class="pl-v">list</span><span class="pl-k">=</span>ls())</pre></div>
+
+<h2>
+<a id="getting-the-data" class="anchor" href="#getting-the-data" aria-hidden="true"><span class="octicon octicon-link"></span></a>Getting the Data</h2>
+
+<p>In order to obtain the most recent data, I download the file directly from the source.  I know it will come in a .zip file, so I unzip the file into my working directory and list all of the files into a vector to loop over.  I also create blank data frames that I will place my parsed XML into.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-c">#Download the file directly from the government, then unzip into a directory</span>
+download.file(<span class="pl-s"><span class="pl-pds">'</span>http://soprweb.senate.gov/downloads/2015_1.zip<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>2015_1.zip<span class="pl-pds">'</span></span>, <span class="pl-v">method</span> <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">'</span>curl<span class="pl-pds">'</span></span>)
+download.file(<span class="pl-s"><span class="pl-pds">'</span>http://soprweb.senate.gov/downloads/2015_2.zip<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>2015_2.zip<span class="pl-pds">'</span></span>, <span class="pl-v">method</span> <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">'</span>curl<span class="pl-pds">'</span></span>)
+unzip(<span class="pl-s"><span class="pl-pds">'</span>2015_1.zip<span class="pl-pds">'</span></span>, <span class="pl-v">exdir</span> <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">'</span>2015_1<span class="pl-pds">'</span></span>)
+unzip(<span class="pl-s"><span class="pl-pds">'</span>2015_2.zip<span class="pl-pds">'</span></span>, <span class="pl-v">exdir</span> <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">'</span>2015_1<span class="pl-pds">'</span></span>)
+
+<span class="pl-c">#Place all items in this directory into a vector</span>
+<span class="pl-smi">files</span> <span class="pl-k">&lt;-</span> dir(<span class="pl-s"><span class="pl-pds">'</span>2015_1<span class="pl-pds">'</span></span>)
+
+<span class="pl-c">#Create blank data frames to append to later</span>
+<span class="pl-smi">filing</span> <span class="pl-k">&lt;-</span> <span class="pl-k">data.frame</span>()
+<span class="pl-smi">registrant</span> <span class="pl-k">&lt;-</span> <span class="pl-k">data.frame</span>()
+<span class="pl-smi">client</span> <span class="pl-k">&lt;-</span> <span class="pl-k">data.frame</span>()
+<span class="pl-smi">issues</span> <span class="pl-k">&lt;-</span> <span class="pl-k">data.frame</span>()</pre></div>
+
+<h2>
+<a id="transforming-the-data" class="anchor" href="#transforming-the-data" aria-hidden="true"><span class="octicon octicon-link"></span></a>Transforming the Data</h2>
+
+<p>The plan with parsing out the data falls in line with the ERD above. We will use XPath to navigate to the correct nodes and collect their attributes into columns.  In order to write a minimal amount of code, we will loop through the files that we have downloaded and combined their data into <code>filing</code>, <code>client</code>, <code>registrant</code>, and <code>issue</code> data frames.  The general process for each data frame will be:</p>
+
+<ol>
+<li>Use XPath to gather attributes</li>
+<li>Place XPath attributes into vectors</li>
+<li>Create a temporary data frame with the vectors</li>
+<li>Use <code>rbind</code> to aggregate the temporary data frames</li>
+</ol>
+
+<h4>
+<a id="filing" class="anchor" href="#filing" aria-hidden="true"><span class="octicon octicon-link"></span></a>Filing</h4>
+
+<p>Below we are creating the <code>filing</code> data frame.  The <code>xpathSApply</code> function calls are used to navigate to all nodes satisfying the query, while the <code>xmlGetAttr</code> is used to extract individual attributes from the XML nodes.  In order to make relationships later on in our analysis, we take the RegistrantID and ClientID attributes and place them in the <code>filing</code> data frame.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-k">for</span> (<span class="pl-smi">file</span> <span class="pl-k">in</span> <span class="pl-smi">files</span>){
+
+    <span class="pl-smi">data</span> <span class="pl-k">&lt;-</span> xmlParse(paste(<span class="pl-s"><span class="pl-pds">'</span>2015_1/<span class="pl-pds">'</span></span>,<span class="pl-smi">file</span>,<span class="pl-v">sep</span> <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">"</span><span class="pl-pds">"</span></span>), <span class="pl-v">useInternalNodes</span> <span class="pl-k">=</span> <span class="pl-c1">T</span>)
+
+    <span class="pl-c">#Filing Key data frame using the XPath language.</span>
+    <span class="pl-smi">filingID</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>ID<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">year</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>Year<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">received</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>Received<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">amount</span> <span class="pl-k">&lt;-</span> as.numeric(xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>Amount<span class="pl-pds">'</span></span>))
+    <span class="pl-smi">reg</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing/Registrant<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>RegistrantID<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">clientID</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">'</span>/PublicFilings/Filing/Client<span class="pl-pds">'</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>ClientID<span class="pl-pds">'</span></span>)
+
+    <span class="pl-smi">temp</span> <span class="pl-k">&lt;-</span> <span class="pl-k">data.frame</span>(<span class="pl-v">FilingID</span> <span class="pl-k">=</span> <span class="pl-smi">filingID</span>, <span class="pl-v">RegistrantID</span> <span class="pl-k">=</span> <span class="pl-smi">reg</span>, <span class="pl-v">Date</span> <span class="pl-k">=</span> <span class="pl-smi">received</span>, 
+                       <span class="pl-v">Year</span> <span class="pl-k">=</span> <span class="pl-smi">year</span>, <span class="pl-v">Amount</span> <span class="pl-k">=</span> <span class="pl-smi">amount</span>, <span class="pl-v">ClientID</span> <span class="pl-k">=</span> <span class="pl-smi">clientID</span>, <span class="pl-v">stringsAsFactors</span> <span class="pl-k">=</span> <span class="pl-c1">F</span>)
+    <span class="pl-smi">filing</span> <span class="pl-k">&lt;-</span> rbind(<span class="pl-smi">filing</span>, <span class="pl-smi">temp</span>)</pre></div>
+
+<h4>
+<a id="client" class="anchor" href="#client" aria-hidden="true"><span class="octicon octicon-link"></span></a>Client</h4>
+
+<p>The <code>client</code> data frame has a one to one relationship with the <code>filing</code> data frame.  One extra step we take towards the end of this code block is to only include unique <code>clientID</code>s into the data frame.</p>
+
+<div class="highlight highlight-r"><pre>    <span class="pl-c">#Client Key data frame</span>
+    <span class="pl-smi">clientID</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">'</span>/PublicFilings/Filing/Client<span class="pl-pds">'</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>ClientID<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">clientName</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">'</span>/PublicFilings/Filing/Client<span class="pl-pds">'</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>ClientName<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">clientState</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">'</span>/PublicFilings/Filing/Client<span class="pl-pds">'</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>ClientState<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">clientCountry</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">'</span>/PublicFilings/Filing/Client<span class="pl-pds">'</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>ClientCountry<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">clientDesc</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">'</span>/PublicFilings/Filing/Client<span class="pl-pds">'</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>GeneralDescription<span class="pl-pds">'</span></span>)
+
+    <span class="pl-smi">ctemp</span> <span class="pl-k">&lt;-</span> <span class="pl-k">data.frame</span>(<span class="pl-v">clientID</span> <span class="pl-k">=</span> <span class="pl-smi">clientID</span>, <span class="pl-v">Name</span> <span class="pl-k">=</span> <span class="pl-smi">clientName</span>, <span class="pl-v">State</span> <span class="pl-k">=</span> <span class="pl-smi">clientState</span>,
+                        <span class="pl-v">Country</span> <span class="pl-k">=</span> <span class="pl-smi">clientCountry</span>, <span class="pl-v">Description</span> <span class="pl-k">=</span> <span class="pl-smi">clientDesc</span>,
+                        <span class="pl-v">stringsAsFactors</span> <span class="pl-k">=</span> <span class="pl-c1">F</span>)
+    <span class="pl-smi">client</span> <span class="pl-k">&lt;-</span> rbind(<span class="pl-smi">client</span>, <span class="pl-smi">ctemp</span>)
+    <span class="pl-smi">cdups</span> <span class="pl-k">&lt;-</span> duplicated(<span class="pl-smi">client</span>[,c(<span class="pl-s"><span class="pl-pds">'</span>clientID<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>Name<span class="pl-pds">'</span></span>)])
+    <span class="pl-smi">client</span> <span class="pl-k">&lt;-</span> <span class="pl-smi">client</span>[<span class="pl-k">!</span><span class="pl-smi">cdups</span>,]</pre></div>
+
+<h4>
+<a id="registrant" class="anchor" href="#registrant" aria-hidden="true"><span class="octicon octicon-link"></span></a>Registrant</h4>
+
+<p>The <code>registrant</code> data frame's process is identical to the <code>client</code> data frame's process.</p>
+
+<div class="highlight highlight-r"><pre>    <span class="pl-c">#Registrant Key data frame</span>
+    <span class="pl-smi">regNum</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing/Registrant<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>RegistrantID<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">regName</span> <span class="pl-k">&lt;-</span>xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing/Registrant<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>RegistrantName<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">regAd</span> <span class="pl-k">&lt;-</span>xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing/Registrant<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>Address<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">regDesc</span> <span class="pl-k">&lt;-</span>xpathSApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing/Registrant<span class="pl-pds">"</span></span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>GeneralDescription<span class="pl-pds">'</span></span>)
+    <span class="pl-smi">rtemp</span> <span class="pl-k">&lt;-</span> <span class="pl-k">data.frame</span>(<span class="pl-v">RegistrantID</span> <span class="pl-k">=</span> <span class="pl-smi">regNum</span>, <span class="pl-v">Name</span> <span class="pl-k">=</span> <span class="pl-smi">regName</span>, <span class="pl-v">Address</span> <span class="pl-k">=</span> <span class="pl-smi">regAd</span>,
+                        <span class="pl-v">Description</span> <span class="pl-k">=</span> <span class="pl-smi">regDesc</span>, <span class="pl-v">stringsAsFactors</span> <span class="pl-k">=</span> <span class="pl-c1">F</span>)
+    <span class="pl-smi">registrant</span> <span class="pl-k">&lt;-</span> rbind(<span class="pl-smi">registrant</span>, <span class="pl-smi">rtemp</span>)
+    <span class="pl-smi">dups</span> <span class="pl-k">&lt;-</span> duplicated(<span class="pl-smi">registrant</span>[,c(<span class="pl-s"><span class="pl-pds">'</span>RegistrantID<span class="pl-pds">'</span></span>, <span class="pl-s"><span class="pl-pds">'</span>Name<span class="pl-pds">'</span></span>)])
+    <span class="pl-smi">registrant</span> <span class="pl-k">&lt;-</span> <span class="pl-smi">registrant</span>[<span class="pl-k">!</span><span class="pl-smi">dups</span>,]</pre></div>
+
+<h4>
+<a id="issues" class="anchor" href="#issues" aria-hidden="true"><span class="octicon octicon-link"></span></a>Issues</h4>
+
+<p>The <code>issues</code> data frame is much more complicated than the others, because of its one-to-many relationship with the <code>filing</code> data frame.  To start, let's break down what the goal is: for every <code>filingID</code>, we want to gather the issues that are associated with it. So for every Filing node, I want to grab the ID attribute, then grab the Code and SpecificIssue attributes within the Issue child node. If there is not an issue associated with a filing, we can mark it as NA and filter it out later.  <code>xpathApply</code> will return a list, therefore we can rap that function in <code>dplyr</code>'s <code>rbind_all</code> function.</p>
+
+<p>The code below was inspired by this <a href="http://stackoverflow.com/questions/17349630/r-dataframe-from-xml-when-values-are-multiple-or-missing">Stack Overflow</a> post.</p>
+
+<div class="highlight highlight-r"><pre>    <span class="pl-c">#Issues Key data frame. Issues are one to many with FilingID</span>
+    <span class="pl-smi">itemp</span> <span class="pl-k">&lt;-</span> rbind_all(xpathApply(<span class="pl-smi">data</span>, <span class="pl-s"><span class="pl-pds">"</span>/PublicFilings/Filing<span class="pl-pds">"</span></span>, <span class="pl-k">function</span>(<span class="pl-smi">node</span>) {
+        <span class="pl-smi">id</span> <span class="pl-k">&lt;-</span> xmlGetAttr(<span class="pl-smi">node</span>, <span class="pl-s"><span class="pl-pds">"</span>ID<span class="pl-pds">"</span></span>)
+        <span class="pl-smi">xp</span> <span class="pl-k">&lt;-</span> <span class="pl-s"><span class="pl-pds">"</span>.//Issue<span class="pl-pds">"</span></span>
+        <span class="pl-smi">issueCode</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">node</span>, <span class="pl-smi">xp</span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>Code<span class="pl-pds">'</span></span>)
+        <span class="pl-smi">issueDesc</span> <span class="pl-k">&lt;-</span> xpathSApply(<span class="pl-smi">node</span>, <span class="pl-smi">xp</span>, <span class="pl-smi">xmlGetAttr</span>, <span class="pl-s"><span class="pl-pds">'</span>SpecificIssue<span class="pl-pds">'</span></span>)
+        <span class="pl-k">if</span> (length(<span class="pl-smi">issueCode</span>)<span class="pl-k">==</span><span class="pl-c1">0</span>){
+            <span class="pl-v">issueCode</span> <span class="pl-k">=</span> <span class="pl-c1">NA</span>
+            <span class="pl-v">issueDesc</span> <span class="pl-k">=</span> <span class="pl-c1">NA</span>
+        }<span class="pl-c">#if statement close</span>
+
+        <span class="pl-k">data.frame</span>(<span class="pl-v">FilingID</span><span class="pl-k">=</span><span class="pl-smi">id</span>, <span class="pl-v">Type</span><span class="pl-k">=</span><span class="pl-smi">issueCode</span>, <span class="pl-v">Description</span> <span class="pl-k">=</span> <span class="pl-smi">issueDesc</span>, <span class="pl-v">stringsAsFactors</span> <span class="pl-k">=</span> <span class="pl-c1">FALSE</span>)})
+        )<span class="pl-c">#rbind_all close</span>
+
+    <span class="pl-smi">issues</span> <span class="pl-k">&lt;-</span> rbind(<span class="pl-smi">issues</span>, <span class="pl-smi">itemp</span>)
+    <span class="pl-smi">issues</span> <span class="pl-k">&lt;-</span> <span class="pl-smi">issues</span>[<span class="pl-k">!</span>is.na(<span class="pl-smi">issues</span><span class="pl-k">$</span><span class="pl-smi">Type</span>),]
+}</pre></div>
+
+<h2>
+<a id="cleaning-up" class="anchor" href="#cleaning-up" aria-hidden="true"><span class="octicon octicon-link"></span></a>Cleaning up</h2>
+
+<p>Congratulations! All of the hard work is finished.  Now we can transform the data type of the <code>Date</code> column and delete some data from our memory.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-smi">filing</span><span class="pl-k">$</span><span class="pl-smi">Date</span> <span class="pl-k">&lt;-</span> as.Date(<span class="pl-smi">filing</span><span class="pl-k">$</span><span class="pl-smi">Date</span>, <span class="pl-v">format</span> <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">"</span>%Y-%m-%d<span class="pl-pds">"</span></span>)
+
+<span class="pl-c">#Delete everything except data frames from memory</span>
+remove(<span class="pl-smi">reg</span>, <span class="pl-smi">ctemp</span>, <span class="pl-smi">rtemp</span>, <span class="pl-smi">temp</span>, <span class="pl-smi">amount</span>, <span class="pl-smi">data</span>, <span class="pl-smi">file</span>, <span class="pl-smi">files</span>, <span class="pl-smi">filingID</span>, 
+               <span class="pl-smi">received</span>, <span class="pl-smi">regAd</span>, <span class="pl-smi">regName</span>, <span class="pl-smi">regNum</span>, <span class="pl-smi">year</span>, <span class="pl-smi">clientCountry</span>, <span class="pl-smi">clientDesc</span>,
+       <span class="pl-smi">clientID</span>, <span class="pl-smi">clientName</span>, <span class="pl-smi">clientState</span>, <span class="pl-smi">dups</span>, <span class="pl-smi">cdups</span>, <span class="pl-smi">regDesc</span>, <span class="pl-smi">itemp</span>)</pre></div>
+
+<h2>
+<a id="what-entities-lobby-the-most" class="anchor" href="#what-entities-lobby-the-most" aria-hidden="true"><span class="octicon octicon-link"></span></a>What entities lobby the most?</h2>
+
+<p>Let's take a quick look at what entities are the most active.  To do this, we will prepare a new data frame, <code>by_registrant</code> that will show <code>filing</code> data grouped by <code>RegistrantID</code> and summarized by both dollar amount and number of filings.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-c">#Create data frame that shows the amount spent by each registrant</span>
+<span class="pl-smi">by_registrant</span> <span class="pl-k">&lt;-</span> <span class="pl-smi">filing</span> %<span class="pl-k">&gt;</span>%
+    group_by(<span class="pl-smi">RegistrantID</span>) %<span class="pl-k">&gt;</span>%
+    summarise(<span class="pl-v">Amount</span> <span class="pl-k">=</span> sum(<span class="pl-smi">Amount</span>,<span class="pl-v">na.rm</span> <span class="pl-k">=</span> <span class="pl-c1">T</span>), <span class="pl-v">Number</span> <span class="pl-k">=</span> n()) %<span class="pl-k">&gt;</span>%
+    filter(<span class="pl-smi">Amount</span> <span class="pl-k">&gt;</span> <span class="pl-c1">0</span>, <span class="pl-smi">Number</span> <span class="pl-k">&gt;</span> <span class="pl-c1">0</span>) %<span class="pl-k">&gt;</span>%
+    left_join(<span class="pl-smi">registrant</span>) %<span class="pl-k">&gt;</span>%
+    arrange(desc(<span class="pl-smi">Amount</span>))</pre></div>
+
+<p>Next, let get to know this data a little bit better by making a scatter plot of the <code>Amount</code> spent and the <code>Number</code> of filings.</p>
+
+<div class="highlight highlight-r"><pre>ggplot(<span class="pl-smi">by_registrant</span>, aes(<span class="pl-v">x</span> <span class="pl-k">=</span> <span class="pl-smi">Number</span>, <span class="pl-v">y</span> <span class="pl-k">=</span> <span class="pl-smi">Amount</span>)) <span class="pl-k">+</span> geom_point()</pre></div>
+
+<p><img src="Lobbying_files/figure-html/plot1-1.png" alt=""> </p>
+
+<p>This plot is interesting because it shows that the registrants that spend the most on lobbying usually only have one associated filing. Let's look at the top ten registrants in terms of <code>Amount</code>.  The <code>reorder</code> function is used to create an order factor variable, based on another variable in the data frame.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-smi">by_registrant</span><span class="pl-k">$</span><span class="pl-smi">Name</span> <span class="pl-k">&lt;-</span> reorder(<span class="pl-smi">by_registrant</span><span class="pl-k">$</span><span class="pl-smi">Name</span>, <span class="pl-k">-</span><span class="pl-smi">by_registrant</span><span class="pl-k">$</span><span class="pl-smi">Amount</span>)
+
+ggplot(<span class="pl-smi">by_registrant</span>[<span class="pl-c1">1</span><span class="pl-k">:</span><span class="pl-c1">10</span>,], aes(<span class="pl-v">x</span> <span class="pl-k">=</span> <span class="pl-smi">Name</span>, <span class="pl-v">y</span> <span class="pl-k">=</span> <span class="pl-smi">Amount</span>)) <span class="pl-k">+</span> 
+    geom_bar(<span class="pl-v">stat</span><span class="pl-k">=</span><span class="pl-s"><span class="pl-pds">'</span>identity<span class="pl-pds">'</span></span>, <span class="pl-v">data</span> <span class="pl-k">=</span> <span class="pl-smi">by_registrant</span>[<span class="pl-c1">1</span><span class="pl-k">:</span><span class="pl-c1">10</span>,], aes(<span class="pl-v">fill</span> <span class="pl-k">=</span> <span class="pl-smi">Name</span>)) <span class="pl-k">+</span> 
+    scale_x_discrete(<span class="pl-v">labels</span><span class="pl-k">=</span><span class="pl-c1">NULL</span>)</pre></div>
+
+<p><img src="Lobbying_files/figure-html/plot2-1.png" alt=""> </p>
+
+<p>Unsurprisingly, the U.S. Chamber of Commerce comes out on top by a hefty margin (they have led the pack in lobbying expenditures for the <a href="http://en.wikipedia.org/wiki/United_States_Chamber_of_Commerce#Lobbying_expenditures">past decade</a>).  </p>
+
+<h1>
+<a id="what-issues-are-lobbied-the-hardest" class="anchor" href="#what-issues-are-lobbied-the-hardest" aria-hidden="true"><span class="octicon octicon-link"></span></a>What issues are lobbied the hardest?</h1>
+
+<p>In order to find the hardest lobbied issues, we'll create a new data frame called <code>num_issues</code>. We trim down the <code>filing</code> data frame by using the <code>select</code> function.  We then shape the issues data frame using <code>dplyr</code>.  Since we are aggregating at the issue level, we will <code>group_by</code> the <code>Type</code> variable.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-smi">select_filing</span> <span class="pl-k">&lt;-</span> select(<span class="pl-smi">filing</span>, <span class="pl-smi">FilingID</span>, <span class="pl-smi">Amount</span>)
+
+<span class="pl-smi">num_issues</span> <span class="pl-k">&lt;-</span> <span class="pl-smi">issues</span> %<span class="pl-k">&gt;</span>%
+    left_join(<span class="pl-smi">select_filing</span>) %<span class="pl-k">&gt;</span>%
+    group_by(<span class="pl-smi">Type</span>) %<span class="pl-k">&gt;</span>%
+    summarise(<span class="pl-v">TotalNumber</span> <span class="pl-k">=</span> n(), <span class="pl-v">TotalDollars</span> <span class="pl-k">=</span> sum(<span class="pl-smi">Amount</span>, <span class="pl-v">na.rm</span> <span class="pl-k">=</span> <span class="pl-c1">T</span>)) %<span class="pl-k">&gt;</span>%
+    arrange(desc(<span class="pl-smi">TotalDollars</span>))</pre></div>
+
+<p>Now that we have a new data frame, we can make a bar plot of the top 10 lobbying issues.  </p>
+
+<div class="highlight highlight-r"><pre><span class="pl-smi">num_issues</span><span class="pl-k">$</span><span class="pl-smi">Type</span> <span class="pl-k">&lt;-</span> reorder(<span class="pl-smi">num_issues</span><span class="pl-k">$</span><span class="pl-smi">Type</span>, <span class="pl-k">-</span><span class="pl-smi">num_issues</span><span class="pl-k">$</span><span class="pl-smi">TotalNumber</span>)
+
+ggplot(<span class="pl-smi">num_issues</span>[<span class="pl-c1">1</span><span class="pl-k">:</span><span class="pl-c1">10</span>,], aes(<span class="pl-v">x</span> <span class="pl-k">=</span> <span class="pl-smi">Type</span>, <span class="pl-v">y</span> <span class="pl-k">=</span> <span class="pl-smi">TotalNumber</span>)) <span class="pl-k">+</span>
+    geom_bar(<span class="pl-v">stat</span><span class="pl-k">=</span><span class="pl-s"><span class="pl-pds">'</span>identity<span class="pl-pds">'</span></span>, <span class="pl-v">data</span> <span class="pl-k">=</span> <span class="pl-smi">num_issues</span>[<span class="pl-c1">1</span><span class="pl-k">:</span><span class="pl-c1">10</span>,], aes(<span class="pl-v">fill</span><span class="pl-k">=</span> <span class="pl-smi">Type</span>)) <span class="pl-k">+</span>
+    scale_x_discrete(<span class="pl-v">labels</span><span class="pl-k">=</span> <span class="pl-c1">NULL</span>)</pre></div>
+
+<p><img src="Lobbying_files/figure-html/plot3-1.png" alt=""> </p>
+
+<p>Budget/Appropriations issues come out on top!  While this probably wasn't the sexy outcome we were hoping for, this graph helps to show the most lobbied issues in government.</p>
+
+<h2>
+<a id="conclusion" class="anchor" href="#conclusion" aria-hidden="true"><span class="octicon octicon-link"></span></a>Conclusion</h2>
+
+<p>There you have it!  This was a quick look at some publicly available lobbying data.  Eventually, I will be making a Shiny app that will allow for some user control of the data set.  Thanks for reading!</p>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/phetzel1/Lobbying">Lobbying</a> is maintained by <a href="https://github.com/phetzel1">phetzel1</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
+
